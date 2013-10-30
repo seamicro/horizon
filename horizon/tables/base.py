@@ -19,6 +19,7 @@ import copy
 import logging
 from operator import attrgetter  # noqa
 import sys
+import types
 
 from django.conf import settings  # noqa
 from django.core import urlresolvers
@@ -1275,7 +1276,11 @@ class DataTable(object):
             Make sure that the value returned is a unique value for the id
             otherwise rendering issues can occur.
         """
-        return datum.id
+	return datum.id
+        if hasattr(datum, 'id'):
+		return datum.id
+	if type(datum) == types.DictType:
+		return datum.get('id', None)
 
     def get_object_display(self, datum):
         """ Returns a display name that identifies this object.
