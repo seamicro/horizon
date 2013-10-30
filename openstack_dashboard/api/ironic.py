@@ -278,13 +278,9 @@ class IronicClient:
 		decoded_json_response = self.send_post(location, params=params)
 		return decoded_json_response
 	
-	def getNodePower(self, uuid, powerOn):
+	def getNodePower(self, uuid):
 		location = "nodes/%s/state/power" % (uuid)
-		if powerOn:
-			params = "target = power on"
-		else:
-			params = "target = power off"
-		decoded_json_response = self.send_put(location, params=params)
+		decoded_json_response = self.send_get(location, params="")
 		return decoded_json_response
 	
 	def setNodePower(self, uuid, powerOn):
@@ -370,6 +366,25 @@ def testNodeCreateSetDiskVLANDelete(ironic):
 	
 	ironic.deleteNode(uuid=newNodeUUID)
 
+def server_power_state(instance_id):
+	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False) 
+	return ironic.getNodePower(instance_id)
+
+
+def server_reboot(request, instance_id, soft_reboot=False):
+	server_stop(request, instance_id)
+	server_start(request, instance_id)
+
+
+def server_stop(request, instance_id):
+	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic.setNodePower(instance_id, False)
+
+
+def server_start(request, instance_id):
+	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic.setNodePower(instance_id, True)
+
 def server_get(request, instance_id):
 	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
 	node = ironic.getNode(instance_id)
@@ -402,7 +417,8 @@ def main():
 	### GROUP NODE TESTS, WILL EXECUTE ON ALL NODES IN IRONIC DB
 	
 	ironic.populateNodesFromChassis(chassis="c2090023-8d6b-4cce-b4f3-6cef94fccc99",driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
-	pprint.pprint(ironic.nodes())
+	#pprint.pprint(ironic.getNodePower('9ec8a89a-b319-4f5d-8c5e-c73c618a0d34'))
+	pprint.pprint(ironic.nodesDetail())
 	#ironic.assignVlanToAllNodes(3)
 	
 	#ironic.powerAllNodes(True)
