@@ -47,6 +47,7 @@ from openstack_dashboard.api import nova
 from openstack_dashboard.api import swift
 from openstack_dashboard.api import trove
 from openstack_dashboard.api import vpn
+from openstack_dashboard.api import ironic
 
 assert base
 assert cinder
@@ -62,3 +63,4 @@ assert swift
 assert ceilometer
 assert trove
 assert vpn
+assert ironic
