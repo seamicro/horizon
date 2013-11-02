@@ -89,8 +89,8 @@ class SetInstanceDetailsAction(workflows.Action):
 
     name = forms.CharField(max_length=80, label=_("Instance Name"))
 
-    flavor = forms.ChoiceField(label=_("Flavor"),
-                               help_text=_("Size of image to launch."))
+#    flavor = forms.ChoiceField(label=_("Flavor"),
+#                               help_text=_("Size of image to launch."))
 
     count = forms.IntegerField(label=_("Instance Count"),
                                min_value=1,

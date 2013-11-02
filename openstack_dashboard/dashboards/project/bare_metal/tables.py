@@ -118,6 +118,14 @@ class ProvisionLink(tables.LinkAction):
     def allowed(self, request, datum):
         return True  # The action should always be displayed
 
+class DiscoverLink(tables.LinkAction):
+    name = "discover"
+    verbose_name = _("Discover")
+    url = "horizon:project:bare_metal:discover"
+    classes = ("btn-launch", "ajax-modal")
+
+    def allowed(self, request, datum):
+        return True  # The action should always be displayed
 
 class EditInstance(tables.LinkAction):
     name = "edit"
@@ -485,6 +493,6 @@ class InstancesTable(tables.DataTable):
         verbose_name = _("Bare Metal Servers")
 #        status_columns = ["power_state", ]
         row_class = UpdateRow
-        table_actions = (ProvisionLink, SoftRebootInstance, TerminateInstance,
+        table_actions = (DiscoverLink, ProvisionLink, SoftRebootInstance, TerminateInstance,
                          InstancesFilterAction)
         row_actions = (StartInstance, SoftRebootInstance, RebootInstance, StopServer)

@@ -9,6 +9,12 @@ import re
 
 from collections import namedtuple
 
+IRONIC_API_HOST="10.0.2.15"
+CHASSIS_ID="e25b5a42-644b-4e3d-bad0-fda872af4860"
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
+LOGGER.addHandler(logging.StreamHandler())
+
 def _connect(hostname, username, password, command):
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
@@ -139,6 +145,7 @@ class IronicClient:
 		decoded_json_response = self.send_get(location, params={ })
 
 		return decoded_json_response
+
         def test_temp(self,driver_info):
                 
                 pool_dict = {}
@@ -179,6 +186,7 @@ class IronicClient:
 		cmd = 'enable;show server description | i /'
 		cmdOutput, err = _exec_seamicrotool(driver_info, cmd)
 		for line in cmdOutput.splitlines():
+			LOGGER.debug(line)
 			parsedLine = line.split()
 			if len(parsedLine) > 1 and parsedLine[1] == "ironic" and parsedLine[2] == "available":
 				nodeList.append(parsedLine[0])
@@ -366,8 +374,13 @@ def testNodeCreateSetDiskVLANDelete(ironic):
 	
 	ironic.deleteNode(uuid=newNodeUUID)
 
+def server_discover(chassis_id):
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False) 
+	return ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
+
+
 def server_power_state(instance_id):
-	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False) 
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False) 
 	return ironic.getNodePower(instance_id)
 
 
@@ -377,23 +390,23 @@ def server_reboot(request, instance_id, soft_reboot=False):
 
 
 def server_stop(request, instance_id):
-	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
 	ironic.setNodePower(instance_id, False)
 
 
 def server_start(request, instance_id):
-	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
 	ironic.setNodePower(instance_id, True)
 
 def server_get(request, instance_id):
-	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
 	node = ironic.getNode(instance_id)
 	node.update({ u'id': node['uuid'], u'name': node['properties']['id'] })
 	node_obj = namedtuple('Node', node.keys())
 	return node_obj(**node)
 
 def nodes(request, search_opts=None):
-	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
 	discovered_nodes = ironic.nodesDetail()
 	named_tuples = []
 	for node in discovered_nodes['nodes']:
@@ -405,7 +418,7 @@ def nodes(request, search_opts=None):
 	return named_tuples, None
 
 def main():
-	ironic = IronicClient(hostname="139.95.116.111:6385/v1", use_ssl=False, verify_ssl=False)
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
 	
 	### INDIVIDUAL NODE TESTS
 	#testNodeCreateDelete(ironic)
@@ -416,7 +429,7 @@ def main():
 	
 	### GROUP NODE TESTS, WILL EXECUTE ON ALL NODES IN IRONIC DB
 	
-	ironic.populateNodesFromChassis(chassis="c2090023-8d6b-4cce-b4f3-6cef94fccc99",driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
+	ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
 	#pprint.pprint(ironic.getNodePower('9ec8a89a-b319-4f5d-8c5e-c73c618a0d34'))
 	pprint.pprint(ironic.nodesDetail())
 	#ironic.assignVlanToAllNodes(3)
