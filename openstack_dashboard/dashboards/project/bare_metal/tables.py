@@ -127,6 +127,24 @@ class DiscoverLink(tables.LinkAction):
     def allowed(self, request, datum):
         return True  # The action should always be displayed
 
+class ProvisionServer(tables.LinkAction):
+    name = "provision"
+    verbose_name = _("Provision Server")
+    url = "horizon:project:bare_metal:provision"
+    classes = ("ajax-modal", "btn-edit")
+
+    def get_link_url(self, project):
+        return self._get_link_url(project, 'instance_info')
+
+    def _get_link_url(self, project, step_slug):
+        base_url = urlresolvers.reverse(self.url, args=[project.id])
+        param = urlencode({"step": step_slug})
+        return "?".join([base_url, param])
+
+    def allowed(self, request, instance):
+        return not is_deleting(instance)
+
+
 class EditInstance(tables.LinkAction):
     name = "edit"
     verbose_name = _("Edit Instance")
@@ -491,8 +509,7 @@ class InstancesTable(tables.DataTable):
     class Meta:
         name = "bare_metal"
         verbose_name = _("Bare Metal Servers")
-#        status_columns = ["power_state", ]
         row_class = UpdateRow
-        table_actions = (DiscoverLink, ProvisionLink, SoftRebootInstance, TerminateInstance,
+        table_actions = (DiscoverLink, SoftRebootInstance, TerminateInstance,
                          InstancesFilterAction)
-        row_actions = (StartInstance, SoftRebootInstance, RebootInstance, StopServer)
+        row_actions = (ProvisionServer, SoftRebootInstance, RebootInstance, StopServer)

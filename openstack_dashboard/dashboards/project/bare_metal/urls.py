@@ -30,7 +30,9 @@ VIEW_MOD = 'openstack_dashboard.dashboards.project.bare_metal.views'
 
 urlpatterns = patterns(VIEW_MOD,
     url(r'^$', views.IndexView.as_view(), name='index'),
+    url(r'^provision/(?P<instance_id>[^/]+)$', views.ProvisionServerView.as_view(), name='provision'),
     url(r'^launch$', views.LaunchInstanceView.as_view(), name='launch'),
+    url(r'^discover$', views.DiscoverMetalView.as_view(), name='discover'),
     url(r'^(?P<instance_id>[^/]+)/$',
         views.DetailView.as_view(), name='detail'),
     url(INSTANCES % 'console', 'console', name='console'),

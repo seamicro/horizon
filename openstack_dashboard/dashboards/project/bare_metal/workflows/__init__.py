@@ -1,7 +1,9 @@
+from discover_bare_metal import DiscoverMetal
 from create_instance import LaunchInstance
 from resize_instance import ResizeInstance
 from update_instance import UpdateInstance
 
+assert DiscoverMetal
 assert LaunchInstance
 assert UpdateInstance
 assert ResizeInstance

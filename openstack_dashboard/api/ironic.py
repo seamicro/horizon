@@ -6,16 +6,18 @@ import logging
 from time import sleep
 import paramiko
 import re
+import sys
 
 from collections import namedtuple
 
 IRONIC_API_HOST="10.0.2.15"
-CHASSIS_ID="e25b5a42-644b-4e3d-bad0-fda872af4860"
+CHASSIS_ID="5c785681-2952-4ec3-881b-8cc5e5e39bdf"
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
-LOGGER.addHandler(logging.StreamHandler())
+LOGGER.addHandler(logging.StreamHandler(sys.stderr))
 
 def _connect(hostname, username, password, command):
+	LOGGER.debug('connecting to %s' % hostname)
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy( paramiko.AutoAddPolicy() )
@@ -82,6 +84,7 @@ class IronicClient:
 		url = "/".join([ self.base_uri, location ])
 		headers = {'content-type': 'application/json'}
 
+		LOGGER.debug('send_get: url=%s, params=%s, headers=%s' % (url, params, headers))
 		r = requests.get(url, verify=self.verify_ssl, params=params)
 		#r = requests.get(url, verify=self.verify_ssl, data=json.dumps(params), headers=headers)
 		return self.decode_response(r)
@@ -90,14 +93,16 @@ class IronicClient:
 		url = "/".join([ self.base_uri, location ])
 		headers = {'content-type': 'application/json'}
 		
-		#r = requests.post(url, verify=self.verify_ssl, params=params)
-		r = requests.post(url, verify=self.verify_ssl, data=json.dumps(params), headers=headers)
+		LOGGER.debug('send_post: url=%s, params=%s, headers=%s' % (url, params, headers))
+		r = requests.post(url, verify=self.verify_ssl, params=params, headers=headers)
+		#r = requests.post(url, verify=self.verify_ssl, data=json.dumps(params), headers=headers)
 		return self.decode_response(r)
 	
 	def send_post_form(self, location, params):
 		url = "/".join([ self.base_uri, location ])
 		headers = {'content-type': 'application/json'}
 		
+		LOGGER.debug('send_post_form: url=%s, params=%s, headers=%s' % (url, params, headers))
 		r = requests.post(url, verify=self.verify_ssl, params=params)
 		#r = requests.post(url, verify=self.verify_ssl, data=json.dumps(params), headers=headers)
 		return self.decode_response(r)
@@ -199,7 +204,9 @@ class IronicClient:
 			nodeProperties = properties
 			nodeProperties['id'] = "%s Card %s" % (hostname,node)
 			cmd = "enable;show server summary %s | include DDR" % (node)
+			LOGGER.debug(cmd)
 			cmdOutput, err = _exec_seamicrotool(driver_info, cmd)
+			LOGGER.debug(cmdOutput)
 			nodeInfo = cmdOutput.split()
 
 			if nodeInfo[6] == "Opteron":
@@ -212,9 +219,10 @@ class IronicClient:
 				#not sure if below is correct, need to test
 				ramOffset = 9
 			
-			ramString = nodeInfo[ramOffset]
-			ram = int(re.match(r'w/(\d*)GB',ramString,re.M | re.I).group(1))
-			nodeProperties['ram'] = ram*1024
+			match = re.search(r'w/(?P<ram>\d+)GB', cmdOutput, re.M|re.I)
+			if match:
+				ram = int(match.group('ram'))
+				nodeProperties['ram'] = ram*1024
 			
 			driver_info['ccard'] = node
 			newNode = self.addNode(chassis=chassis,driver="pxe_seamicro", properties=nodeProperties,driver_info=driver_info)
@@ -242,23 +250,27 @@ class IronicClient:
 
                 return decoded_json_response
 
+
 	def nodes(self):
 		location = "nodes"
 		decoded_json_response = self.send_get(location, params={ })
 
 		return decoded_json_response
+
 	
 	def getNode(self,uuid):
 		location = "nodes/%s" % (uuid)
 		decoded_json_response = self.send_get(location, params={ })
 
 		return decoded_json_response
+
 	
 	def addNode(self,chassis="",driver="",properties={},driver_info={}):
 		location = "nodes"
 		params = {"chassis" : chassis, "driver" : driver, "properties" : properties, "driver_info" : driver_info}
 		decoded_json_response = self.send_post(location, params=params)
 		return decoded_json_response
+
 	
 	def clearAllNodes(self):
 		for node in self.nodes()['nodes']:
@@ -268,11 +280,13 @@ class IronicClient:
 			sleep(2)
 		return True
 	
+
 	def updateNode(self, uuid, params=[]):
 		location = "nodes/%s" % (uuid)
 
 		decoded_json_response = self.send_patch(location, params=params)
 		return decoded_json_response
+
 	
 	def deleteNode(self,uuid):
 		location = "nodes/%s" % (uuid)
@@ -306,11 +320,13 @@ class IronicClient:
 		decoded_json_response = self.send_post(location, params=params)
 		return decoded_json_response
 
+
 	def setNodeVlan(self, uuid, vlan_id):
 		location = "nodes/%s/vendor_passthru/set_vlan" % (uuid)
 		params = {"vlan":vlan_id}
 		decoded_json_response = self.send_post(location, params=params)
 		return decoded_json_response
+
 	
 	def assignVlanToAllNodes(self,vlan_id):
 		for node in self.nodes()['nodes']:
@@ -318,11 +334,13 @@ class IronicClient:
 			#sleep or we overload the chassis cli
 			sleep(2)
 		return True
+
 	
 	def powerAllNodes(self,powerOn):
 		for node in self.nodes()['nodes']:
 			self.setNodePower(node['uuid'],powerOn)
 		return True
+
 	
 def testNodeCreateDelete(ironic):
 	driver_info = { 'username': 'admin', 'password': 'seamicro', 'ccard': u'57/0','address': '10.216.142.87' }
@@ -379,6 +397,14 @@ def server_discover(chassis_id):
 	return ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
 
 
+def server_assign_disk(instance_id, volume_size):
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
+	return ironic.setNodeDisk(instance_id, volume_size)
+
+def server_assign_vlan(instance_id, vlan_id, nic=0):
+	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False) 
+	return ironic.setNodeVlan(instance_id, vlan_id, nic)
+
 def server_power_state(instance_id):
 	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False) 
 	return ironic.getNodePower(instance_id)
@@ -429,7 +455,8 @@ def main():
 	
 	### GROUP NODE TESTS, WILL EXECUTE ON ALL NODES IN IRONIC DB
 	
-	ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
+	#ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
+	ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '192.168.142.10' })
 	#pprint.pprint(ironic.getNodePower('9ec8a89a-b319-4f5d-8c5e-c73c618a0d34'))
 	pprint.pprint(ironic.nodesDetail())
 	#ironic.assignVlanToAllNodes(3)

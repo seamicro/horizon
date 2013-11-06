@@ -491,18 +491,8 @@ class SetStorageAction(workflows.Action):
        name = _("Volume Size")
        help_text = _("Choose the size volume to assign to your server.") 
 
-class SetStorage(workflows.Step):
-    action_class = SetStorageAction
-    contributes = ("volume_size",)
-
-    def contribute(self, data, context):
-        if data:
-            post = self.workflow.request.POST
-            context['volume_size'] = data.get("volume_size", "")
-        return context
-
-class SetVlanAction(workflows.Action):
-    vlan = forms.IntegerField(label=_("VLAN"),
+class SetNetworkAction(workflows.Action):
+    network = forms.IntegerField(label=_("VLAN"),
                                         required=True,
                                         error_messages={
                                             'required': _(
@@ -516,16 +506,54 @@ class SetVlanAction(workflows.Action):
         permissions = ('openstack.services.network',)
         help_text = _("Select nic0 VLAN for your server.")
 
-class SetVlan(workflows.Step):
-    action_class = SetVlanAction
-    contributes = ("vlan_id",)
+    def populate_network_choices(self, request, context):
+        try:
+            tenant_id = self.request.user.tenant_id
+            networks = api.neutron.network_list_for_tenant(request, tenant_id)
+            for n in networks:
+                n.set_id_as_name_if_empty()
+            network_list = [(network.id, network.name) for network in networks]
+        except Exception:
+            network_list = []
+            exceptions.handle(request,
+                              _('Unable to retrieve networks.'))
+        return network_list
+
+    def populate_profile_choices(self, request, context):
+        try:
+            profiles = api.neutron.profile_list(request, 'policy')
+            profile_list = [(profile.id, profile.name) for profile in profiles]
+        except Exception:
+            profile_list = []
+            exceptions.handle(request, _("Unable to retrieve profiles."))
+        return profile_list
+
+class SetStorage(workflows.Step):
+    action_class = SetStorageAction
+
+class SetNetwork(workflows.Step):
+    action_class = SetNetworkAction
+    # Disabling the template drag/drop only in the case port profiles
+    # are used till the issue with the drag/drop affecting the
+    # profile_id detection is fixed.
+    if api.neutron.is_port_profiles_supported():
+        contributes = ("network_id", "profile_id",)
+    else:
+        template_name = "project/bare_metal/_update_networks.html"
+        contributes = ("network_id",)
 
     def contribute(self, data, context):
         if data:
-            post = self.workflow.request.POST
-            context['vlan_id'] = data.get("vlan_id", "")
-        return context
+            networks = self.workflow.request.POST.getlist("network")
+            # If no networks are explicitly specified, network list
+            # contains an empty string, so remove it.
+            networks = [n for n in networks if n != '']
+            if networks:
+                context['network_id'] = networks
 
+            if api.neutron.is_port_profiles_supported():
+                context['profile_id'] = data.get('profile', None)
+        return context
 
 class DiscoverMetal(workflows.Workflow):
     slug = "discover_metal"
@@ -544,7 +572,7 @@ class LaunchInstance(workflows.Workflow):
     success_url = "horizon:project:bare_metal:index"
     default_steps = (SelectProjectUser,
                      SetAccessControls,
-                     SetVlan,
+                     SetNetwork,
                      SetStorage,
                      PostCreationStep)
 
@@ -587,15 +615,49 @@ class LaunchInstance(workflows.Workflow):
                  }
             ]
 
-        vlans = context.get('vlan_id', None)
+        netids = context.get('network_id', None)
+        if netids:
+            nics = [{"net-id": netid, "v4-fixed-ip": ""}
+                    for netid in netids]
+        else:
+            nics = None
 
         avail_zone = context.get('availability_zone', None)
 
+        # Create port with Network Name and Port Profile
+        # for the use with the plugin supporting port profiles.
+        # neutron port-create <Network name> --n1kv:profile <Port Profile ID>
+        # for net_id in context['network_id']:
+        ## HACK for now use first network
+        if api.neutron.is_port_profiles_supported():
+            net_id = context['network_id'][0]
+            LOG.debug("Horizon->Create Port with %(netid)s %(profile_id)s",
+                      {'netid': net_id, 'profile_id': context['profile_id']})
+            try:
+                port = api.neutron.port_create(request, net_id,
+                                               policy_profile_id=
+                                               context['profile_id'])
+            except Exception:
+                msg = (_('Port not created for profile-id (%s).') %
+                       context['profile_id'])
+                exceptions.handle(request, msg)
+            if port and port.id:
+                nics = [{"port-id": port.id}]
+
         try:
-            print context
-            api.ironic.server_assign_disk(request, context['volume_size'])
-            api.ironic.server_assign_vlan(request, context['vlan_id'])
-            #api.ironic.server_start(request, 
+            api.nova.server_create(request,
+                                   context['name'],
+                                   image_id,
+                                   context['flavor'],
+                                   context['keypair_id'],
+                                   normalize_newlines(custom_script),
+                                   context['security_group_ids'],
+                                   block_device_mapping=dev_mapping_1,
+                                   block_device_mapping_v2=dev_mapping_2,
+                                   nics=nics,
+                                   availability_zone=avail_zone,
+                                   instance_count=int(context['count']),
+                                   admin_pass=context['admin_pass'])
             return True
         except Exception:
             exceptions.handle(request)
