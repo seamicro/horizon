@@ -308,9 +308,9 @@ class IronicClient:
 	def setNodePower(self, uuid, powerOn):
 		location = "nodes/%s/state/power" % (uuid)
 		if powerOn:
-			params = "target=power on"
+			params = { 'target': 'power on' }
 		else:
-			params = "target=power off"
+			params = { 'target': 'power off' }
 		decoded_json_response = self.send_put(location, params=params)
 		return decoded_json_response
 	
@@ -396,6 +396,9 @@ def server_discover(chassis_id):
 	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False) 
 	return ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
 
+def server_provision(request, instance_id):
+	LOGGER.debug('provision: id=%s' % instance_id)
+	LOGGER.debug('provision: request=%s' % request)
 
 def server_assign_disk(instance_id, volume_size):
 	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
@@ -422,7 +425,7 @@ def server_stop(request, instance_id):
 
 def server_start(request, instance_id):
 	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
-	ironic.setNodePower(instance_id, True)
+	return ironic.setNodePower(instance_id, True)
 
 def server_get(request, instance_id):
 	ironic = IronicClient(hostname="%s:6385/v1" % IRONIC_API_HOST, use_ssl=False, verify_ssl=False)
@@ -458,6 +461,7 @@ def main():
 	#ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '10.216.142.87' })
 	ironic.populateNodesFromChassis(chassis=CHASSIS_ID, driver_info={ 'username': 'admin', 'password': 'seamicro', 'address': '192.168.142.10' })
 	#pprint.pprint(ironic.getNodePower('9ec8a89a-b319-4f5d-8c5e-c73c618a0d34'))
+
 	pprint.pprint(ironic.nodesDetail())
 	#ironic.assignVlanToAllNodes(3)
 	

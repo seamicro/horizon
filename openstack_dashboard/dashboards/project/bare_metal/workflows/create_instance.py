@@ -43,6 +43,8 @@ from openstack_dashboard.dashboards.project.images_and_snapshots import utils
 
 
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+LOG.addHandler(logging.StreamHandler())
 
 
 class SelectProjectUserAction(workflows.Action):
@@ -66,13 +68,6 @@ class SelectProjectUserAction(workflows.Action):
         # keep this step in the workflow for validation/verification purposes.
         permissions = ("!",)
 
-class SelectChassisAction(workflows.Action):
-    chassis_ip = forms.CharField(max_length = 80, label=_("Chassis IP Address"))
-
-class SelectChassis(workflows.Step):
-    action_class = SelectChassisAction
-
-
 class SelectProjectUser(workflows.Step):
     action_class = SelectProjectUserAction
     contributes = ("project_id", "user_id")
@@ -94,9 +89,6 @@ class SetInstanceDetailsAction(workflows.Action):
                                           required=False)
 
     name = forms.CharField(max_length=80, label=_("Instance Name"))
-
-#    flavor = forms.ChoiceField(label=_("Flavor"),
-#                               help_text=_("Size of image to launch."))
 
     count = forms.IntegerField(label=_("Instance Count"),
                                min_value=1,
@@ -477,14 +469,10 @@ class CustomizeAction(workflows.Action):
                               "_launch_customize_help.html")
 
 
-class PostCreationStep(workflows.Step):
-    action_class = CustomizeAction
-    contributes = ("customization_script",)
-
 class SetStorageAction(workflows.Action):
     volume_size = forms.IntegerField(label=_("Volume Size"),
                                min_value=1,
-                               initial=8,
+                               initial=32,
                                help_text=_("Volume size to assign, in GB."))
 
     class Meta:
@@ -493,6 +481,7 @@ class SetStorageAction(workflows.Action):
 
 class SetStorage(workflows.Step):
     action_class = SetStorageAction
+    depends_on = ('instance_id',)
     contributes = ("volume_size",)
 
     def contribute(self, data, context):
@@ -502,7 +491,7 @@ class SetStorage(workflows.Step):
         return context
 
 class SetVlanAction(workflows.Action):
-    vlan = forms.IntegerField(label=_("VLAN"),
+    vlan_id = forms.IntegerField(label=_("VLAN"),
                                         required=True,
                                         error_messages={
                                             'required': _(
@@ -514,7 +503,8 @@ class SetVlanAction(workflows.Action):
     class Meta:
         name = _("Networking")
         permissions = ('openstack.services.network',)
-        help_text = _("Select nic0 VLAN for your server.")
+        help_text = _("Select nic 0 VLAN for your server.")
+
 
 class SetVlan(workflows.Step):
     action_class = SetVlanAction
@@ -526,16 +516,7 @@ class SetVlan(workflows.Step):
             context['vlan_id'] = data.get("vlan_id", "")
         return context
 
-
-class DiscoverMetal(workflows.Workflow):
-    slug = "discover_metal"
-    name = _("Discover new servers")
-    finalize_button_name = _("Go")
-    success_message = _("Started discovery of new nodes")
-    success_url = "horizon:project:bare_metal:index"
-    default_steps = (SelectChassis,)
-
-class LaunchInstance(workflows.Workflow):
+class ProvisionServer(workflows.Workflow):
     slug = "provision_server"
     name = _("Provision Server")
     finalize_button_name = _("Go")
@@ -545,8 +526,7 @@ class LaunchInstance(workflows.Workflow):
     default_steps = (SelectProjectUser,
                      SetAccessControls,
                      SetVlan,
-                     SetStorage,
-                     PostCreationStep)
+                     SetStorage)
 
     def format_status_message(self, message):
         name = self.context.get('name', 'unknown instance')
@@ -559,42 +539,14 @@ class LaunchInstance(workflows.Workflow):
 
     @sensitive_variables('context')
     def handle(self, request, context):
-        custom_script = context.get('customization_script', '')
-
-        dev_mapping_1 = None
-        dev_mapping_2 = None
-
-        image_id = ''
-
-        # Determine volume mapping options
-        source_type = context.get('source_type', None)
-        if source_type in ['image_id', 'instance_snapshot_id']:
-            image_id = context['source_id']
-        elif source_type in ['volume_id', 'volume_snapshot_id']:
-            dev_mapping_1 = {context['device_name']: '%s::%s' %
-                                                     (context['source_id'],
-                           int(bool(context['delete_on_terminate'])))}
-        elif source_type == 'volume_image_id':
-            dev_mapping_2 = [
-                {'device_name': str(context['device_name']),
-                 'source_type': 'image',
-                 'destination_type': 'volume',
-                 'delete_on_termination':
-                     int(bool(context['delete_on_terminate'])),
-                 'uuid': context['source_id'],
-                 'boot_index': '0',
-                 'volume_size': context['volume_size']
-                 }
-            ]
-
-        vlans = context.get('vlan_id', None)
-
+	LOG.debug("self.context = %s" % self.context)
+        vlan_id = context.get('vlan_id', None)
         avail_zone = context.get('availability_zone', None)
 
         try:
-            print context
-            api.ironic.server_assign_disk(request, context['volume_size'])
-            api.ironic.server_assign_vlan(request, context['vlan_id'])
+            #LOG.debug("context = %s" % context)
+            api.ironic.server_assign_disk(context['instance_id'], context['volume_size'])
+            api.ironic.server_assign_vlan(context['instance_id'], vlan_id)
             #api.ironic.server_start(request, 
             return True
         except Exception:

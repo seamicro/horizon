@@ -109,23 +109,18 @@ class SoftRebootInstance(RebootInstance):
         api.ironic.server_reboot(request, obj_id, soft_reboot=True)
 
 
-class ProvisionLink(tables.LinkAction):
-    name = "provision"
-    verbose_name = _("Provision")
-    url = "horizon:project:bare_metal:launch"
-    classes = ("btn-launch", "ajax-modal")
-
-    def allowed(self, request, datum):
-        return True  # The action should always be displayed
-
-class DiscoverLink(tables.LinkAction):
-    name = "discover"
-    verbose_name = _("Discover")
-    url = "horizon:project:bare_metal:discover"
-    classes = ("btn-launch", "ajax-modal")
-
-    def allowed(self, request, datum):
-        return True  # The action should always be displayed
+#class ProvisionLink(tables.LinkAction):
+#    name = "provision"
+#    verbose_name = _("Provision")
+#    url = "horizon:project:bare_metal:launch"
+#    classes = ("btn-launch", "ajax-modal")
+#
+#    def allowed(self, request, datum):
+#        return True  # The action should always be displayed
+#
+#    def action(self, request, obj_id):
+#	print "ProvisionLink: action: %s" % obj_id
+#        api.ironic.server_provision(request, obj_id)
 
 class ProvisionServer(tables.LinkAction):
     name = "provision"
@@ -133,17 +128,20 @@ class ProvisionServer(tables.LinkAction):
     url = "horizon:project:bare_metal:provision"
     classes = ("ajax-modal", "btn-edit")
 
-    def get_link_url(self, project):
-        return self._get_link_url(project, 'instance_info')
-
-    def _get_link_url(self, project, step_slug):
-        base_url = urlresolvers.reverse(self.url, args=[project.id])
-        param = urlencode({"step": step_slug})
-        return "?".join([base_url, param])
+#    def get_link_url(self, project):
+#        return self._get_link_url(project, 'instance_info')
+#
+#    def _get_link_url(self, project, step_slug):
+#        base_url = urlresolvers.reverse(self.url, args=[self.datum.id])
+#        param = urlencode({"step": step_slug})
+#        return "?".join([base_url, param])
 
     def allowed(self, request, instance):
         return not is_deleting(instance)
 
+    def action(self, request, obj_id):
+	print "ProvisionServer: action: %s" % obj_id
+        api.ironic.server_provision(request, obj_id)
 
 class EditInstance(tables.LinkAction):
     name = "edit"
@@ -386,7 +384,7 @@ class StartInstance(tables.BatchAction):
         return True
 
     def action(self, request, obj_id):
-        api.ironic.server_start(request, obj_id)
+        return api.ironic.server_start(request, obj_id)
 
 
 class StopServer(tables.BatchAction):
@@ -474,34 +472,21 @@ class InstancesTable(tables.DataTable):
     STATUS_CHOICES = (
         ("active", True),
         ("shutoff", True),
-#        ("suspended", True),
-#        ("paused", True),
         ("error", False),
     )
+
     name = tables.Column("name",
                          link=("horizon:project:bare_metal:detail"),
                          verbose_name=_("Server Name"))
     architecture = tables.Column(get_arch,
                                verbose_name=_("Architecture"))
-#    ip = tables.Column(get_ips,
-#                       verbose_name=_("IP Address"),
-#                       attrs={'data-type': "ip"})
+    uuid = tables.Column("id", verbose_name=_("UUID"))
+
     storage = tables.Column(get_size,
                          verbose_name=_("Size"),
                          attrs={'data-type': 'size'})
     keypair = tables.Column(get_keyname, verbose_name=_("Keypair"))
-#    status = tables.Column("status",
-#                           filters=(title, filters.replace_underscores),
-#                           verbose_name=_("Status"),
-#                           status=True,
-#                           status_choices=STATUS_CHOICES,
-#                           display_choices=STATUS_DISPLAY_CHOICES)
-#    task = tables.Column("OS-EXT-STS:task_state",
-#                         verbose_name=_("Task"),
-#                         filters=(title, filters.replace_underscores),
-#                         status=True,
-#                         status_choices=TASK_STATUS_CHOICES,
-#                         display_choices=TASK_DISPLAY_CHOICES)
+
     state = tables.Column(get_power_state,
                           filters=(title, filters.replace_underscores),
                           verbose_name=_("Power State"))
@@ -510,6 +495,8 @@ class InstancesTable(tables.DataTable):
         name = "bare_metal"
         verbose_name = _("Bare Metal Servers")
         row_class = UpdateRow
-        table_actions = (DiscoverLink, SoftRebootInstance, TerminateInstance,
+        table_actions = (SoftRebootInstance, TerminateInstance,
                          InstancesFilterAction)
-        row_actions = (ProvisionServer, SoftRebootInstance, RebootInstance, StopServer)
+        #row_actions = (ProvisionServer, SoftRebootInstance, RebootInstance, StopServer)
+        row_actions = (StartInstance, SoftRebootInstance, RebootInstance, StopServer)
+

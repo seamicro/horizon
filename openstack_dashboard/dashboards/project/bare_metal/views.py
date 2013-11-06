@@ -99,18 +99,10 @@ class IndexView(tables.DataTableView):
 	print instances
         return instances
 
-class DiscoverMetalView(workflows.WorkflowView):
-    workflow_class = project_workflows.DiscoverMetal
-
-    def get_initial(self):
-        initial = super(DiscoverMetalView, self).get_initial()
-        initial['project_id'] = self.request.user.tenant_id
-        initial['user_id'] = self.request.user.id
-        return initial
 
 
 class LaunchInstanceView(workflows.WorkflowView):
-    workflow_class = project_workflows.LaunchInstance
+    workflow_class = project_workflows.ProvisionServer
 
     def get_initial(self):
         initial = super(LaunchInstanceView, self).get_initial()
@@ -159,16 +151,22 @@ def spice(request, instance_id):
         exceptions.handle(request, msg, redirect=redirect)
 
 class ProvisionServerView(workflows.WorkflowView):
-    workflow_class = project_workflows.LaunchInstance
+    workflow_class = project_workflows.ProvisionServer
     success_url = reverse_lazy("horizon:project:bare_metal:index")
 
     def get_initial(self):
         initial = super(ProvisionServerView, self).get_initial()
-        initial['project_id'] = self.request.user.tenant_id
-        initial['user_id'] = self.request.user.id
+	initial.update({'instance_id': self.kwargs['instance_id'],
+		'project_id': self.request.user.tenant_id,
+		'user_id': self.request.user.id})
+	print "initial = %s" % initial
         return initial
 
-    def get_context_data(self, **kwargs):
+    def _get_object(self, *args, **kwargs):
+        instance_id = self.kwargs['instance_id']	
+	return api.ironic.server_get(instance_id)
+
+    def get_context_data(self, *args, **kwargs):
         context = super(ProvisionServerView, self).get_context_data(**kwargs)
         context["instance_id"] = self.kwargs['instance_id']
         return context

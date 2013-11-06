@@ -25,6 +25,7 @@ from horizon import exceptions
 from horizon.forms.views import ADD_TO_FIELD_HEADER  # noqa
 from horizon import messages
 
+import sys
 
 class WorkflowView(generic.TemplateView):
     """
@@ -134,7 +135,7 @@ class WorkflowView(generic.TemplateView):
         if workflow.is_valid():
             try:
                 success = workflow.finalize()
-            except Exception:
+            except Exception as ex:
                 success = False
                 exceptions.handle(request)
             next = self.request.REQUEST.get(workflow.redirect_param_name, None)

@@ -1,9 +1,9 @@
 from discover_bare_metal import DiscoverMetal
-from create_instance import LaunchInstance
+from create_instance import ProvisionServer
 from resize_instance import ResizeInstance
 from update_instance import UpdateInstance
 
 assert DiscoverMetal
-assert LaunchInstance
+assert ProvisionServer
 assert UpdateInstance
 assert ResizeInstance
